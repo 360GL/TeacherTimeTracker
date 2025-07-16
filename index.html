@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi des Heures Enseignant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 16px 24px;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .card-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .card-number.danger {
+            color: #ef4444;
+        }
+
+        .card-max {
+            font-size: 1rem;
+            color: #64748b;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-blue { background-color: #3b82f6; }
+        .progress-orange { background-color: #f97316; }
+        .progress-red { background-color: #ef4444; }
+
+        .add-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 16px 24px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #64748b;
+            width: 100%;
+            margin-bottom: 32px;
+        }
+
+        .add-button:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .form-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .form-modal.active {
+            display: flex;
+        }
+
+        .form-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .form-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .form-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+            padding: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            color: #1e293b;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .duration-input {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .duration-number {
+            width: 80px;
+            text-align: center;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            border: 1px solid #d1d5db;
+            background: white;
+            color: #64748b;
+        }
+
+        .btn-primary {
+            border: none;
+            background: #3b82f6;
+            color: white;
+        }
+
+        .activities-section h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1e293b;
+        }
+
+        .activity-item {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .activity-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .activity-color {
+            width: 4px;
+            height: 40px;
+            border-radius: 2px;
+        }
+
+        .activity-details h4 {
+            font-weight: 500;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .activity-details p {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .activity-duration {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .mobile-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+        }
+
+        .nav-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #64748b;
+        }
+
+        .nav-button.active {
+            color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-content {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <h1>Suivi des heures</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Dashboard -->
+        <div id="dashboard-section">
+            <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; color: #1e293b;">Tableau de bord</h2>
+            
+            <div class="dashboard-grid">
+                <!-- Total -->
+                <div class="card">
+                    <div class="card-label">Total</div>
+                    <div class="card-value">
+                        <span id="total-hours" class="card-number">0</span>
+                        <span class="card-max">/ 1534 h</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="total-progress" class="progress-fill progress-blue" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Face à face -->
+                <div class="card">
+                    <div class="card-label">Face & face</div>
+                    <div class="card-value">
+                        <span id="cours-hours" class="card-number">0</span>
+                        <span class="card-max">/ 972 h</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="cours-progress" class="progress-fill progress-orange" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Induites -->
+                <div class="card">
+                    <div class="card-label">Induites</div>
+                    <div class="card-value">
+                        <span id="induites-hours" class="card-number">0</span>
+                        <span class="card-max">/ 562 h</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="induites-progress" class="progress-fill progress-red" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Button -->
+            <button class="add-button" onclick="openAddModal()">
+                <span style="font-size: 1.25rem;">+</span>
+                Ajouter une activité
+            </button>
+
+            <!-- Recent Activities -->
+            <div class="activities-section">
+                <h3>Activités récentes</h3>
+                <div id="activities-list">
+                    <div class="empty-state">
+                        <p>Aucune activité enregistrée</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Activity Modal -->
+    <div id="add-modal" class="form-modal">
+        <div class="form-content">
+            <div class="form-header">
+                <h2 class="form-title">Ajouter une activité</h2>
+                <button class="close-button" onclick="closeAddModal()">×</button>
+            </div>
+
+            <form id="activity-form">
+                <div class="form-group">
+                    <label class="form-label">Type d'activité</label>
+                    <select id="activity-type" class="form-select" required>
+                        <option value="">Sélectionner une activité</option>
+                        <option value="face-a-face">Face à face pédagogique</option>
+                        <option value="reunion-lyon2">Réunion direction Lyon 2</option>
+                        <option value="reunion-petite-ecole">Réunion direction Petite École</option>
+                        <option value="reunion-equipe">Réunion équipe Petite École</option>
+                        <option value="reunions-parents">Réunions parents</option>
+                        <option value="preparation-cours">Préparation de cours</option>
+                        <option value="journees-pedagogiques">Journées pédagogiques</option>
+                        <option value="autres">Autres</option>
+                        <option value="surveillance-repas">Surveillance repas enfants</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" id="activity-date" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Durée</label>
+                    <div class="duration-input">
+                        <input type="number" id="activity-duration" class="form-input duration-number" 
+                               step="0.5" min="0" placeholder="1" required>
+                        <span style="color: #64748b; font-weight: 500;">h</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea id="activity-comment" class="form-textarea" 
+                              placeholder="Détails supplémentaires..."></textarea>
+                </div>
+
+                <div class="form-buttons">
+                    <button type="button" class="btn btn-cancel" onclick="closeAddModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Ajouter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Mobile Navigation -->
+    <div class="mobile-nav">
+        <button class="nav-button active">Tableau de bord</button>
+    </div>
+
+    <script>
+        // Types d'activités avec couleurs
+        const ACTIVITY_TYPES = {
+            'face-a-face': { name: 'Face à face pédagogique', category: 'Cours', isAnnex: false, color: '#3b82f6' },
+            'reunion-lyon2': { name: 'Réunion direction Lyon 2', category: 'Heures induites', isAnnex: false, color: '#8b5cf6' },
+            'reunion-petite-ecole': { name: 'Réunion direction Petite École', category: 'Heures induites', isAnnex: false, color: '#8b5cf6' },
+            'reunion-equipe': { name: 'Réunion équipe Petite École', category: 'Heures induites', isAnnex: false, color: '#8b5cf6' },
+            'reunions-parents': { name: 'Réunions parents', category: 'Heures induites', isAnnex: false, color: '#f97316' },
+            'preparation-cours': { name: 'Préparation de cours', category: 'Heures induites', isAnnex: false, color: '#8b5cf6' },
+            'journees-pedagogiques': { name: 'Journées pédagogiques', category: 'Heures induites', isAnnex: false, color: '#8b5cf6' },
+            'autres': { name: 'Autres', category: 'Heures annexes', isAnnex: true, color: '#10b981' },
+            'surveillance-repas': { name: 'Surveillance repas enfants', category: 'Heures annexes', isAnnex: true, color: '#10b981' }
+        };
+
+        let activities = [];
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            loadActivities();
+            setTodayDate();
+            updateDashboard();
+            updateActivitiesList();
+        });
+
+        // Charger les activités
+        function loadActivities() {
+            const saved = localStorage.getItem('teacher-activities');
+            if (saved) {
+                try {
+                    activities = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Erreur lors du chargement:', e);
+                    activities = [];
+                }
+            }
+        }
+
+        // Sauvegarder les activités
+        function saveActivities() {
+            localStorage.setItem('teacher-activities', JSON.stringify(activities));
+        }
+
+        // Définir la date d'aujourd'hui
+        function setTodayDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('activity-date').value = today;
+        }
+
+        // Ouvrir le modal d'ajout
+        function openAddModal() {
+            document.getElementById('add-modal').classList.add('active');
+        }
+
+        // Fermer le modal d'ajout
+        function closeAddModal() {
+            document.getElementById('add-modal').classList.remove('active');
+            document.getElementById('activity-form').reset();
+            setTodayDate();
+        }
+
+        // Calculer les totaux
+        function calculateTotals() {
+            const now = new Date();
+            const schoolYear = getSchoolYearRange();
+
+            const totals = {
+                annual: { cours: 0, induites: 0, annexes: 0, total: 0 }
+            };
+
+            activities.forEach(activity => {
+                const activityDate = new Date(activity.date);
+                const activityType = ACTIVITY_TYPES[activity.type];
+                if (!activityType) return;
+
+                const duration = activity.duration;
+
+                if (activityDate >= schoolYear.start && activityDate <= schoolYear.end) {
+                    if (activityType.category === 'Cours') {
+                        totals.annual.cours += duration;
+                    } else if (activityType.isAnnex) {
+                        totals.annual.annexes += duration;
+                    } else {
+                        totals.annual.induites += duration;
+                    }
+                    totals.annual.total += duration;
+                }
+            });
+
+            return totals;
+        }
+
+        // Obtenir la plage de l'année scolaire
+        function getSchoolYearRange() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            
+            const schoolYear = month >= 8 ? year : year - 1;
+            
+            return {
+                start: new Date(schoolYear, 8, 1),
+                end: new Date(schoolYear + 1, 7, 31)
+            };
+        }
+
+        // Mettre à jour le tableau de bord
+        function updateDashboard() {
+            const totals = calculateTotals();
+
+            // Total
+            const totalEl = document.getElementById('total-hours');
+            const totalProgressEl = document.getElementById('total-progress');
+            totalEl.textContent = totals.annual.total;
+            totalEl.className = 'card-number' + (totals.annual.total > 1534 ? ' danger' : '');
+            totalProgressEl.style.width = Math.min((totals.annual.total / 1534) * 100, 100) + '%';
+
+            // Cours
+            const coursEl = document.getElementById('cours-hours');
+            const coursProgressEl = document.getElementById('cours-progress');
+            coursEl.textContent = totals.annual.cours;
+            coursEl.className = 'card-number' + (totals.annual.cours > 972 ? ' danger' : '');
+            coursProgressEl.style.width = Math.min((totals.annual.cours / 972) * 100, 100) + '%';
+
+            // Induites
+            const induitesEl = document.getElementById('induites-hours');
+            const induitesProgressEl = document.getElementById('induites-progress');
+            induitesEl.textContent = totals.annual.induites;
+            induitesEl.className = 'card-number' + (totals.annual.induites > 562 ? ' danger' : '');
+            induitesProgressEl.style.width = Math.min((totals.annual.induites / 562) * 100, 100) + '%';
+        }
+
+        // Mettre à jour la liste des activités
+        function updateActivitiesList() {
+            const listEl = document.getElementById('activities-list');
+            
+            if (activities.length === 0) {
+                listEl.innerHTML = '<div class="empty-state"><p>Aucune activité enregistrée</p></div>';
+                return;
+            }
+
+            const sortedActivities = activities
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 5);
+
+            listEl.innerHTML = sortedActivities.map(activity => {
+                const activityType = ACTIVITY_TYPES[activity.type];
+                const date = new Date(activity.date).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                });
+
+                return `
+                    <div class="activity-item">
+                        <div class="activity-info">
+                            <div class="activity-color" style="background-color: ${activityType.color}"></div>
+                            <div class="activity-details">
+                                <h4>${activityType.name}</h4>
+                                <p>${date}${activity.comment ? ' • ' + activity.comment : ''}</p>
+                            </div>
+                        </div>
+                        <div class="activity-duration">${activity.duration}h</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Gérer la soumission du formulaire
+        document.getElementById('activity-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const type = document.getElementById('activity-type').value;
+            const date = document.getElementById('activity-date').value;
+            const duration = document.getElementById('activity-duration').value;
+            const comment = document.getElementById('activity-comment').value;
+
+            if (!type || !date || !duration) {
+                alert('Veuillez remplir tous les champs obligatoires');
+                return;
+            }
+
+            const activity = {
+                id: Date.now().toString(),
+                type: type,
+                date: date,
+                duration: parseFloat(duration),
+                comment: comment
+            };
+
+            activities.push(activity);
+            saveActivities();
+            updateDashboard();
+            updateActivitiesList();
+            closeAddModal();
+        });
+
+        // Fermer le modal en cliquant à l'extérieur
+        document.getElementById('add-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddModal();
+            }
+        });
+    </script>
+</body>
+</html>
