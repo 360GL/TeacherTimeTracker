@@ -5,7 +5,7 @@ import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 
 interface AuthFormProps {
-  onAuthSuccess: () => void
+  window.location.reload()
 }
 
 export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
