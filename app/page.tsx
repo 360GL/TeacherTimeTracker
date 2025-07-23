@@ -1,6 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase"
+import AuthForm from "@/components/AuthForm"
+import type { User } from "@supabase/supabase-js"
 
 // Types d'activités avec couleurs
 const ACTIVITY_TYPES = [
@@ -151,66 +154,86 @@ const ACTIVITY_TYPES = [
 
 interface Activity {
   id: string
+  user_id: string
   type: string
   date: string
   duration: number
   comment?: string
-  isPlanned?: boolean
+  is_planned?: boolean
+  created_at: string
 }
 
 export default function TeacherHoursTracker() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
   const [activities, setActivities] = useState<Activity[]>([])
   const [newActivity, setNewActivity] = useState({
     type: "",
     date: new Date().toISOString().split("T")[0],
     duration: "",
     comment: "",
-    isPlanned: false,
+    is_planned: false,
   })
   const [activeTab, setActiveTab] = useState("dashboard")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [stopwatchTime, setStopwatchTime] = useState(0)
   const [stopwatchRunning, setStopwatchRunning] = useState(false)
-  const [stopwatchStartTime, setStopwatchStartTime] = useState<number | null>(null)
   const [showStopwatchModal, setShowStopwatchModal] = useState(false)
   const [stopwatchInterval, setStopwatchInterval] = useState<NodeJS.Timeout | null>(null)
 
-  // Charger les données depuis localStorage
+  // Vérifier l'authentification
   useEffect(() => {
-    const saved = localStorage.getItem("teacher-activities")
-    if (saved) {
-      try {
-        setActivities(JSON.parse(saved))
-      } catch (e) {
-        console.error("Erreur lors du chargement des données:", e)
-      }
+    const getSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      setUser(session?.user ?? null)
+      setLoading(false)
     }
+
+    getSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  // Sauvegarder dans localStorage
+  // Charger les activités de l'utilisateur
   useEffect(() => {
-    localStorage.setItem("teacher-activities", JSON.stringify(activities))
-  }, [activities])
+    if (user) {
+      loadActivities()
+    }
+  }, [user])
 
-  // Calculer l'année scolaire (septembre à août)
-  const getSchoolYear = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    return month >= 8 ? year : year - 1
+  const loadActivities = async () => {
+    if (!user) return
+
+    const { data, error } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Erreur lors du chargement:", error)
+    } else {
+      setActivities(data || [])
+    }
   }
 
-  const getCurrentSchoolYearRange = () => {
-    const now = new Date()
-    const schoolYear = getSchoolYear(now)
-    return {
-      start: new Date(schoolYear, 8, 1),
-      end: new Date(schoolYear + 1, 7, 31),
-    }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
   }
 
   // Ajouter une activité
-  const addActivity = () => {
+  const addActivity = async () => {
+    if (!user) return
+
     if (editingId) {
       // Mode édition
       if (!newActivity.type || !newActivity.duration) {
@@ -218,25 +241,24 @@ export default function TeacherHoursTracker() {
         return
       }
 
-      const updatedActivity: Activity = {
-        id: editingId,
-        type: newActivity.type,
-        date: newActivity.date,
-        duration: Number.parseFloat(newActivity.duration),
-        comment: newActivity.comment,
-        isPlanned: newActivity.isPlanned,
+      const { error } = await supabase
+        .from("activities")
+        .update({
+          type: newActivity.type,
+          date: newActivity.date,
+          duration: Number.parseFloat(newActivity.duration),
+          comment: newActivity.comment,
+          is_planned: newActivity.is_planned,
+        })
+        .eq("id", editingId)
+
+      if (error) {
+        console.error("Erreur lors de la modification:", error)
+        alert("Erreur lors de la modification")
+        return
       }
 
-      setActivities(activities.map((a) => (a.id === editingId ? updatedActivity : a)))
       setEditingId(null)
-      setNewActivity({
-        type: "",
-        date: new Date().toISOString().split("T")[0],
-        duration: "",
-        comment: "",
-        isPlanned: false,
-      })
-      setActiveTab("dashboard")
     } else {
       // Mode ajout
       if (!newActivity.type || !newActivity.duration) {
@@ -244,47 +266,57 @@ export default function TeacherHoursTracker() {
         return
       }
 
-      const activity: Activity = {
-        id: Date.now().toString(),
+      const { error } = await supabase.from("activities").insert({
+        user_id: user.id,
         type: newActivity.type,
         date: newActivity.date,
         duration: Number.parseFloat(newActivity.duration),
         comment: newActivity.comment,
-        isPlanned: newActivity.isPlanned,
-      }
-
-      setActivities([...activities, activity])
-      setNewActivity({
-        type: "",
-        date: new Date().toISOString().split("T")[0],
-        duration: "",
-        comment: "",
-        isPlanned: false,
+        is_planned: newActivity.is_planned,
       })
-      setActiveTab("dashboard")
+
+      if (error) {
+        console.error("Erreur lors de l'ajout:", error)
+        alert("Erreur lors de l'ajout")
+        return
+      }
     }
+
+    setNewActivity({
+      type: "",
+      date: new Date().toISOString().split("T")[0],
+      duration: "",
+      comment: "",
+      is_planned: false,
+    })
+    setActiveTab("dashboard")
+    loadActivities()
   }
 
   // Modifier une activité
-  const editActivity = (id: string) => {
-    const activity = activities.find((a) => a.id === id)
-    if (activity) {
-      setNewActivity({
-        type: activity.type,
-        date: activity.date,
-        duration: activity.duration.toString(),
-        comment: activity.comment || "",
-        isPlanned: activity.isPlanned || false,
-      })
-      setEditingId(id)
-      setActiveTab("add")
-    }
+  const editActivity = (activity: Activity) => {
+    setNewActivity({
+      type: activity.type,
+      date: activity.date,
+      duration: activity.duration.toString(),
+      comment: activity.comment || "",
+      is_planned: activity.is_planned || false,
+    })
+    setEditingId(activity.id)
+    setActiveTab("add")
   }
 
   // Supprimer une activité
-  const deleteActivity = (id: string) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette activité ?")) {
-      setActivities(activities.filter((a) => a.id !== id))
+  const deleteActivity = async (id: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette activité ?")) return
+
+    const { error } = await supabase.from("activities").delete().eq("id", id)
+
+    if (error) {
+      console.error("Erreur lors de la suppression:", error)
+      alert("Erreur lors de la suppression")
+    } else {
+      loadActivities()
     }
   }
 
@@ -296,7 +328,7 @@ export default function TeacherHoursTracker() {
       date: new Date().toISOString().split("T")[0],
       duration: "",
       comment: "",
-      isPlanned: false,
+      is_planned: false,
     })
     setActiveTab("dashboard")
   }
@@ -305,7 +337,6 @@ export default function TeacherHoursTracker() {
   const startStopwatch = () => {
     if (!stopwatchRunning) {
       const now = Date.now()
-      setStopwatchStartTime(now - stopwatchTime)
       setStopwatchRunning(true)
 
       const interval = setInterval(() => {
@@ -324,29 +355,33 @@ export default function TeacherHoursTracker() {
   const resetStopwatch = () => {
     setStopwatchTime(0)
     setStopwatchRunning(false)
-    setStopwatchStartTime(null)
     if (stopwatchInterval) {
       clearInterval(stopwatchInterval)
       setStopwatchInterval(null)
     }
   }
 
-  const saveStopwatchActivity = (activityType: string) => {
-    if (stopwatchTime > 0) {
-      const hours = Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100
+  const saveStopwatchActivity = async (activityType: string) => {
+    if (!user || stopwatchTime === 0) return
 
-      const activity: Activity = {
-        id: Date.now().toString(),
-        type: activityType,
-        date: new Date().toISOString().split("T")[0],
-        duration: hours,
-        comment: `Chronométré: ${formatStopwatchTime(stopwatchTime)}`,
-        isPlanned: false,
-      }
+    const hours = Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100
 
-      setActivities([...activities, activity])
+    const { error } = await supabase.from("activities").insert({
+      user_id: user.id,
+      type: activityType,
+      date: new Date().toISOString().split("T")[0],
+      duration: hours,
+      comment: `Chronométré: ${formatStopwatchTime(stopwatchTime)}`,
+      is_planned: false,
+    })
+
+    if (error) {
+      console.error("Erreur lors de la sauvegarde:", error)
+      alert("Erreur lors de la sauvegarde")
+    } else {
       resetStopwatch()
       setShowStopwatchModal(false)
+      loadActivities()
     }
   }
 
@@ -362,27 +397,28 @@ export default function TeacherHoursTracker() {
     }
   }
 
+  // Calculer l'année scolaire (septembre à août)
+  const getSchoolYear = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    return month >= 8 ? year : year - 1
+  }
+
+  const getCurrentSchoolYearRange = () => {
+    const now = new Date()
+    const schoolYear = getSchoolYear(now)
+    return {
+      start: new Date(schoolYear, 8, 1),
+      end: new Date(schoolYear + 1, 7, 31),
+    }
+  }
+
   // Calculer les totaux
   const calculateTotals = () => {
     const schoolYear = getCurrentSchoolYearRange()
-    const now = new Date()
-
-    // Semaine actuelle (lundi à dimanche)
-    const currentWeekStart = new Date(now)
-    const day = now.getDay()
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-    currentWeekStart.setDate(diff)
-    const currentWeekEnd = new Date(currentWeekStart)
-    currentWeekEnd.setDate(currentWeekStart.getDate() + 6)
-
-    // Mois actuel
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
 
     const totals = {
       annual: { cours: 0, induites: 0, annexes: 0, total: 0 },
-      monthly: { cours: 0, induites: 0, annexes: 0, total: 0 },
-      weekly: { cours: 0, induites: 0, annexes: 0, total: 0 },
     }
 
     activities.forEach((activity) => {
@@ -403,36 +439,10 @@ export default function TeacherHoursTracker() {
         }
         totals.annual.total += duration
       }
-
-      // Totaux mensuels
-      if (activityDate >= currentMonthStart && activityDate <= currentMonthEnd) {
-        if (activityType.category === "Cours") {
-          totals.monthly.cours += duration
-        } else if (activityType.isAnnex) {
-          totals.monthly.annexes += duration
-        } else {
-          totals.monthly.induites += duration
-        }
-        totals.monthly.total += duration
-      }
-
-      // Totaux hebdomadaires
-      if (activityDate >= currentWeekStart && activityDate <= currentWeekEnd) {
-        if (activityType.category === "Cours") {
-          totals.weekly.cours += duration
-        } else if (activityType.isAnnex) {
-          totals.weekly.annexes += duration
-        } else {
-          totals.weekly.induites += duration
-        }
-        totals.weekly.total += duration
-      }
     })
 
     return totals
   }
-
-  const totals = calculateTotals()
 
   // Export CSV
   const exportCSV = () => {
@@ -450,7 +460,7 @@ export default function TeacherHoursTracker() {
         activityType?.category || "",
         activity.duration.toString(),
         activity.comment || "",
-        activity.isPlanned ? "Planifié" : "Réalisé",
+        activity.is_planned ? "Planifié" : "Réalisé",
       ]
     })
 
@@ -471,7 +481,6 @@ export default function TeacherHoursTracker() {
     isOverLimit,
   }: { current: number; max: number; color: string; isOverLimit?: boolean }) => {
     const percentage = Math.min((current / max) * 100, 100)
-    const overflowPercentage = current > max ? ((current - max) / max) * 100 : 0
 
     return (
       <div
@@ -493,22 +502,31 @@ export default function TeacherHoursTracker() {
             transition: "width 0.3s ease",
           }}
         />
-        {overflowPercentage > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: "100%",
-              width: `${Math.min(overflowPercentage, 50)}%`,
-              height: "100%",
-              backgroundColor: "#ef4444",
-              opacity: 0.8,
-            }}
-          />
-        )}
       </div>
     )
   }
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#f8fafc",
+        }}
+      >
+        <div style={{ fontSize: "1.125rem", color: "#64748b" }}>Chargement...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthForm onAuthSuccess={() => setUser(user)} />
+  }
+
+  const totals = calculateTotals()
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", color: "#1e293b" }}>
@@ -523,23 +541,39 @@ export default function TeacherHoursTracker() {
             alignItems: "center",
           }}
         >
-          <h1 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1e293b" }}>Suivi des heures</h1>
-          <button
-            onClick={() => setShowMobileMenu(true)}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "8px",
-            }}
-          >
-            <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
-            <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
-            <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
-          </button>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1e293b" }}>Suivi des heures - {user.email}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <button
+              onClick={() => setShowMobileMenu(true)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "8px",
+              }}
+            >
+              <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
+              <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
+              <div style={{ width: "20px", height: "2px", backgroundColor: "#64748b" }}></div>
+            </button>
+            <button
+              onClick={handleSignOut}
+              style={{
+                padding: "8px 16px",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                background: "white",
+                color: "#64748b",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+              }}
+            >
+              Déconnexion
+            </button>
+          </div>
         </div>
       </div>
 
@@ -629,15 +663,7 @@ export default function TeacherHoursTracker() {
                   }}
                 >
                   <div style={{ marginBottom: "8px" }}>
-                    <span
-                      style={{
-                        fontSize: "0.875rem",
-                        color: totals.annual.induites > 562 ? "#ef4444" : "#64748b",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Induites
-                    </span>
+                    <span style={{ fontSize: "0.875rem", color: "#64748b", fontWeight: "500" }}>Induites</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "12px" }}>
                     <span
@@ -705,83 +731,80 @@ export default function TeacherHoursTracker() {
                 </div>
               ) : (
                 <div style={{ display: "grid", gap: "12px" }}>
-                  {activities
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .slice(0, 5)
-                    .map((activity) => {
-                      const activityType = ACTIVITY_TYPES.find((t) => t.id === activity.type)
-                      return (
-                        <div
-                          key={activity.id}
-                          style={{
-                            backgroundColor: "white",
-                            borderRadius: "8px",
-                            padding: "16px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div
-                              style={{
-                                width: "4px",
-                                height: "40px",
-                                backgroundColor: activityType?.color || "#64748b",
-                                borderRadius: "2px",
-                              }}
-                            />
-                            <div>
-                              <div style={{ fontWeight: "500", color: "#1e293b", marginBottom: "4px" }}>
-                                {activityType?.name}
-                              </div>
-                              <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
-                                {new Date(activity.date).toLocaleDateString("fr-FR", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                                {activity.comment && ` • ${activity.comment}`}
-                              </div>
+                  {activities.slice(0, 5).map((activity) => {
+                    const activityType = ACTIVITY_TYPES.find((t) => t.id === activity.type)
+                    return (
+                      <div
+                        key={activity.id}
+                        style={{
+                          backgroundColor: "white",
+                          borderRadius: "8px",
+                          padding: "16px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <div
+                            style={{
+                              width: "4px",
+                              height: "40px",
+                              backgroundColor: activityType?.color || "#64748b",
+                              borderRadius: "2px",
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: "500", color: "#1e293b", marginBottom: "4px" }}>
+                              {activityType?.name}
                             </div>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div style={{ fontWeight: "600", color: "#1e293b" }}>{activity.duration}h</div>
-                            <div style={{ display: "flex", gap: "4px" }}>
-                              <button
-                                onClick={() => editActivity(activity.id)}
-                                style={{
-                                  background: "none",
-                                  border: "1px solid #d1d5db",
-                                  borderRadius: "4px",
-                                  padding: "4px 8px",
-                                  cursor: "pointer",
-                                  fontSize: "0.75rem",
-                                  color: "#64748b",
-                                }}
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                onClick={() => deleteActivity(activity.id)}
-                                style={{
-                                  background: "none",
-                                  border: "1px solid #fecaca",
-                                  borderRadius: "4px",
-                                  padding: "4px 8px",
-                                  cursor: "pointer",
-                                  fontSize: "0.75rem",
-                                  color: "#dc2626",
-                                }}
-                              >
-                                🗑️
-                              </button>
+                            <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
+                              {new Date(activity.date).toLocaleDateString("fr-FR", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                              {activity.comment && ` • ${activity.comment}`}
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <div style={{ fontWeight: "600", color: "#1e293b" }}>{activity.duration}h</div>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <button
+                              onClick={() => editActivity(activity)}
+                              style={{
+                                background: "none",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "4px",
+                                padding: "4px 8px",
+                                cursor: "pointer",
+                                fontSize: "0.75rem",
+                                color: "#64748b",
+                              }}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteActivity(activity.id)}
+                              style={{
+                                background: "none",
+                                border: "1px solid #fecaca",
+                                borderRadius: "4px",
+                                padding: "4px 8px",
+                                cursor: "pointer",
+                                fontSize: "0.75rem",
+                                color: "#dc2626",
+                              }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -983,82 +1006,80 @@ export default function TeacherHoursTracker() {
                   <p>Aucune activité enregistrée</p>
                 </div>
               ) : (
-                activities
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((activity) => {
-                    const activityType = ACTIVITY_TYPES.find((t) => t.id === activity.type)
-                    return (
-                      <div
-                        key={activity.id}
-                        style={{
-                          backgroundColor: "white",
-                          borderRadius: "8px",
-                          padding: "16px",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <div
-                            style={{
-                              width: "4px",
-                              height: "40px",
-                              backgroundColor: activityType?.color || "#64748b",
-                              borderRadius: "2px",
-                            }}
-                          />
-                          <div>
-                            <div style={{ fontWeight: "500", color: "#1e293b", marginBottom: "4px" }}>
-                              {activityType?.name}
-                            </div>
-                            <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
-                              {new Date(activity.date).toLocaleDateString("fr-FR", {
-                                day: "numeric",
-                                month: "long",
-                                year: "numeric",
-                              })}
-                              {activity.comment && ` • ${activity.comment}`}
-                            </div>
+                activities.map((activity) => {
+                  const activityType = ACTIVITY_TYPES.find((t) => t.id === activity.type)
+                  return (
+                    <div
+                      key={activity.id}
+                      style={{
+                        backgroundColor: "white",
+                        borderRadius: "8px",
+                        padding: "16px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div
+                          style={{
+                            width: "4px",
+                            height: "40px",
+                            backgroundColor: activityType?.color || "#64748b",
+                            borderRadius: "2px",
+                          }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: "500", color: "#1e293b", marginBottom: "4px" }}>
+                            {activityType?.name}
                           </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <div style={{ fontWeight: "600", color: "#1e293b" }}>{activity.duration}h</div>
-                          <div style={{ display: "flex", gap: "4px" }}>
-                            <button
-                              onClick={() => editActivity(activity.id)}
-                              style={{
-                                background: "none",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "4px",
-                                padding: "4px 8px",
-                                cursor: "pointer",
-                                fontSize: "0.75rem",
-                                color: "#64748b",
-                              }}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => deleteActivity(activity.id)}
-                              style={{
-                                background: "none",
-                                border: "1px solid #fecaca",
-                                borderRadius: "4px",
-                                padding: "4px 8px",
-                                cursor: "pointer",
-                                fontSize: "0.75rem",
-                                color: "#dc2626",
-                              }}
-                            >
-                              🗑️
-                            </button>
+                          <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
+                            {new Date(activity.date).toLocaleDateString("fr-FR", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                            {activity.comment && ` • ${activity.comment}`}
                           </div>
                         </div>
                       </div>
-                    )
-                  })
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div style={{ fontWeight: "600", color: "#1e293b" }}>{activity.duration}h</div>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <button
+                            onClick={() => editActivity(activity)}
+                            style={{
+                              background: "none",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "4px",
+                              padding: "4px 8px",
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: "#64748b",
+                            }}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => deleteActivity(activity.id)}
+                            style={{
+                              background: "none",
+                              border: "1px solid #fecaca",
+                              borderRadius: "4px",
+                              padding: "4px 8px",
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: "#dc2626",
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>
