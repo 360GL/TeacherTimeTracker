@@ -198,6 +198,7 @@ export default function TeacherHoursTracker() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
@@ -317,6 +318,49 @@ export default function TeacherHoursTracker() {
       alert("Erreur lors de la suppression")
     } else {
       loadActivities()
+    }
+  }
+
+  // Supprimer toutes les activités
+  const deleteAllActivities = async () => {
+    const confirmMessage = `⚠️ ATTENTION ⚠️
+
+Vous êtes sur le point de supprimer TOUTES vos activités (${activities.length} activités).
+
+Cette action est IRRÉVERSIBLE et supprimera définitivement :
+• Toutes vos heures enregistrées
+• Tous vos commentaires
+• Tout votre historique
+
+Êtes-vous absolument certain(e) de vouloir continuer ?
+
+Tapez "SUPPRIMER" pour confirmer :`
+
+    const userInput = prompt(confirmMessage)
+
+    if (userInput !== "SUPPRIMER") {
+      alert("Suppression annulée.")
+      return
+    }
+
+    // Double confirmation
+    if (!confirm("Dernière confirmation : Supprimer TOUTES les activités ?")) {
+      return
+    }
+
+    try {
+      const { error } = await supabase.from("activities").delete().eq("user_id", user?.id)
+
+      if (error) {
+        console.error("Erreur lors de la suppression:", error)
+        alert("Erreur lors de la suppression")
+      } else {
+        alert("✅ Toutes les activités ont été supprimées.")
+        loadActivities()
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
+      alert("Erreur lors de la suppression")
     }
   }
 
@@ -721,9 +765,29 @@ export default function TeacherHoursTracker() {
 
             {/* Liste des activités récentes */}
             <div>
-              <h3 style={{ fontSize: "1.125rem", fontWeight: "600", marginBottom: "16px", color: "#1e293b" }}>
-                Activités récentes
-              </h3>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}
+              >
+                <h3 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#1e293b" }}>Activités récentes</h3>
+                {activities.length > 0 && (
+                  <button
+                    onClick={deleteAllActivities}
+                    style={{
+                      background: "none",
+                      border: "1px solid #fecaca",
+                      borderRadius: "4px",
+                      padding: "4px 8px",
+                      cursor: "pointer",
+                      fontSize: "0.75rem",
+                      color: "#dc2626",
+                      fontWeight: "500",
+                    }}
+                    title="Supprimer toutes les activités"
+                  >
+                    🗑️ Tout supprimer
+                  </button>
+                )}
+              </div>
 
               {activities.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
