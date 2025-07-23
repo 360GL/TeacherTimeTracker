@@ -5,7 +5,7 @@ import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 
 interface AuthFormProps {
-  window.location.reload()
+  onAuthSuccess: () => void
 }
 
 export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
@@ -27,14 +27,16 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
           password,
         })
         if (error) throw error
-        onAuthSuccess()
+        // Recharger la page après connexion réussie
+        window.location.reload()
       } else {
         const { error } = await supabase.auth.signUp({
           email,
           password,
         })
         if (error) throw error
-        setMessage("Vérifiez votre email pour confirmer votre compte!")
+        setMessage("Compte créé ! Vous pouvez maintenant vous connecter.")
+        setIsLogin(true)
       }
     } catch (error: any) {
       setMessage(error.message)
@@ -157,8 +159,8 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
               marginTop: "16px",
               padding: "12px",
               borderRadius: "8px",
-              backgroundColor: message.includes("Vérifiez") ? "#dcfce7" : "#fef2f2",
-              color: message.includes("Vérifiez") ? "#166534" : "#dc2626",
+              backgroundColor: message.includes("créé") ? "#dcfce7" : "#fef2f2",
+              color: message.includes("créé") ? "#166534" : "#dc2626",
               fontSize: "0.875rem",
             }}
           >
