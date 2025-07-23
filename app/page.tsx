@@ -170,6 +170,11 @@ export default function TeacherHoursTracker() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [stopwatchTime, setStopwatchTime] = useState(0)
+  const [stopwatchRunning, setStopwatchRunning] = useState(false)
+  const [stopwatchStartTime, setStopwatchStartTime] = useState<number | null>(null)
+  const [showStopwatchModal, setShowStopwatchModal] = useState(false)
+  const [stopwatchInterval, setStopwatchInterval] = useState<NodeJS.Timeout | null>(null)
 
   // Charger les données depuis localStorage
   useEffect(() => {
@@ -294,6 +299,67 @@ export default function TeacherHoursTracker() {
       isPlanned: false,
     })
     setActiveTab("dashboard")
+  }
+
+  // Fonctions du chronomètre
+  const startStopwatch = () => {
+    if (!stopwatchRunning) {
+      const now = Date.now()
+      setStopwatchStartTime(now - stopwatchTime)
+      setStopwatchRunning(true)
+
+      const interval = setInterval(() => {
+        setStopwatchTime(Date.now() - (now - stopwatchTime))
+      }, 100)
+      setStopwatchInterval(interval)
+    } else {
+      setStopwatchRunning(false)
+      if (stopwatchInterval) {
+        clearInterval(stopwatchInterval)
+        setStopwatchInterval(null)
+      }
+    }
+  }
+
+  const resetStopwatch = () => {
+    setStopwatchTime(0)
+    setStopwatchRunning(false)
+    setStopwatchStartTime(null)
+    if (stopwatchInterval) {
+      clearInterval(stopwatchInterval)
+      setStopwatchInterval(null)
+    }
+  }
+
+  const saveStopwatchActivity = (activityType: string) => {
+    if (stopwatchTime > 0) {
+      const hours = Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100
+
+      const activity: Activity = {
+        id: Date.now().toString(),
+        type: activityType,
+        date: new Date().toISOString().split("T")[0],
+        duration: hours,
+        comment: `Chronométré: ${formatStopwatchTime(stopwatchTime)}`,
+        isPlanned: false,
+      }
+
+      setActivities([...activities, activity])
+      resetStopwatch()
+      setShowStopwatchModal(false)
+    }
+  }
+
+  const formatStopwatchTime = (time: number) => {
+    const hours = Math.floor(time / (1000 * 60 * 60))
+    const minutes = Math.floor((time % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((time % (1000 * 60)) / 1000)
+
+    if (hours > 0) {
+      return `${hours}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+    } else {
+      return `${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+    }
   }
 
   // Calculer les totaux
@@ -997,7 +1063,217 @@ export default function TeacherHoursTracker() {
             </div>
           </div>
         )}
+
+        {activeTab === "stopwatch" && (
+          <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+            <div
+              style={{
+                backgroundColor: "white",
+                borderRadius: "12px",
+                padding: "32px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                textAlign: "center",
+              }}
+            >
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1e293b", marginBottom: "32px" }}>
+                Chronomètre
+              </h2>
+
+              <div
+                style={{
+                  fontSize: "3rem",
+                  fontWeight: "700",
+                  color: stopwatchRunning ? "#3b82f6" : "#1e293b",
+                  marginBottom: "32px",
+                  fontFamily: "monospace",
+                }}
+              >
+                {formatStopwatchTime(stopwatchTime)}
+              </div>
+
+              <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginBottom: "24px" }}>
+                <button
+                  onClick={startStopwatch}
+                  style={{
+                    padding: "12px 24px",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    backgroundColor: stopwatchRunning ? "#ef4444" : "#10b981",
+                    color: "white",
+                    minWidth: "120px",
+                  }}
+                >
+                  {stopwatchRunning ? "⏸️ Pause" : "▶️ Start"}
+                </button>
+                <button
+                  onClick={resetStopwatch}
+                  style={{
+                    padding: "12px 24px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    backgroundColor: "white",
+                    color: "#64748b",
+                    minWidth: "120px",
+                  }}
+                >
+                  🔄 Reset
+                </button>
+              </div>
+
+              {stopwatchTime > 0 && !stopwatchRunning && (
+                <button
+                  onClick={() => setShowStopwatchModal(true)}
+                  style={{
+                    padding: "12px 24px",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    backgroundColor: "#3b82f6",
+                    color: "white",
+                    width: "100%",
+                  }}
+                >
+                  💾 Enregistrer cette session
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Modal de sauvegarde du chronomètre */}
+      {showStopwatchModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            zIndex: 1001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowStopwatchModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              padding: "32px",
+              maxWidth: "500px",
+              width: "90%",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
+            >
+              <h3 style={{ fontSize: "1.25rem", fontWeight: "600", color: "#1e293b" }}>Enregistrer la session</h3>
+              <button
+                onClick={() => setShowStopwatchModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "#64748b",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "24px", textAlign: "center" }}>
+              <div style={{ fontSize: "2rem", fontWeight: "700", color: "#3b82f6", marginBottom: "8px" }}>
+                {formatStopwatchTime(stopwatchTime)}
+              </div>
+              <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
+                Soit {Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100} heures
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontWeight: "500", marginBottom: "8px", color: "#374151" }}>
+                Type d'activité
+              </label>
+              <select
+                id="stopwatch-activity-type"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "1rem",
+                  backgroundColor: "white",
+                  color: "#1e293b",
+                }}
+              >
+                <option value="">Sélectionner une activité</option>
+                {ACTIVITY_TYPES.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={() => setShowStopwatchModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px 24px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "1rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  backgroundColor: "white",
+                  color: "#64748b",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  const select = document.getElementById("stopwatch-activity-type") as HTMLSelectElement
+                  if (select.value) {
+                    saveStopwatchActivity(select.value)
+                  } else {
+                    alert("Veuillez sélectionner un type d'activité")
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px 24px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "1rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                }}
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Menu mobile */}
       {showMobileMenu && (
@@ -1101,6 +1377,25 @@ export default function TeacherHoursTracker() {
               >
                 📋 Liste
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab("stopwatch")
+                  setShowMobileMenu(false)
+                }}
+                style={{
+                  padding: "12px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "1rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  backgroundColor: activeTab === "stopwatch" ? "#eff6ff" : "transparent",
+                  color: activeTab === "stopwatch" ? "#3b82f6" : "#64748b",
+                  textAlign: "left",
+                }}
+              >
+                ⏱️ Chronomètre
+              </button>
             </div>
           </div>
         </div>
@@ -1168,6 +1463,22 @@ export default function TeacherHoursTracker() {
           }}
         >
           Liste
+        </button>
+        <button
+          onClick={() => setActiveTab("stopwatch")}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "8px 16px",
+            borderRadius: "8px",
+            fontSize: "0.875rem",
+            fontWeight: "500",
+            color: activeTab === "stopwatch" ? "#3b82f6" : "#64748b",
+            backgroundColor: activeTab === "stopwatch" ? "#eff6ff" : "transparent",
+          }}
+        >
+          Chrono
         </button>
       </div>
     </div>
