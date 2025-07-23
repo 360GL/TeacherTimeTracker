@@ -765,29 +765,9 @@ Tapez "SUPPRIMER" pour confirmer :`
 
             {/* Liste des activités récentes */}
             <div>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}
-              >
-                <h3 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#1e293b" }}>Activités récentes</h3>
-                {activities.length > 0 && (
-                  <button
-                    onClick={deleteAllActivities}
-                    style={{
-                      background: "none",
-                      border: "1px solid #fecaca",
-                      borderRadius: "4px",
-                      padding: "4px 8px",
-                      cursor: "pointer",
-                      fontSize: "0.75rem",
-                      color: "#dc2626",
-                      fontWeight: "500",
-                    }}
-                    title="Supprimer toutes les activités"
-                  >
-                    🗑️ Tout supprimer
-                  </button>
-                )}
-              </div>
+              <h3 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#1e293b", marginBottom: "16px" }}>
+                Activités récentes
+              </h3>
 
               {activities.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
@@ -869,6 +849,38 @@ Tapez "SUPPRIMER" pour confirmer :`
                       </div>
                     )
                   })}
+                </div>
+              )}
+
+              {/* Bouton Supprimer toutes les heures - EN BAS */}
+              {activities.length > 0 && (
+                <div style={{ textAlign: "center", marginTop: "32px", marginBottom: "32px" }}>
+                  <button
+                    onClick={deleteAllActivities}
+                    style={{
+                      background: "none",
+                      border: "1px solid #fecaca",
+                      borderRadius: "6px",
+                      padding: "8px 16px",
+                      cursor: "pointer",
+                      fontSize: "0.875rem",
+                      color: "#dc2626",
+                      fontWeight: "500",
+                      backgroundColor: "#fef2f2",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = "#fee2e2"
+                      e.currentTarget.style.borderColor = "#f87171"
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = "#fef2f2"
+                      e.currentTarget.style.borderColor = "#fecaca"
+                    }}
+                    title="Supprimer toutes les activités"
+                  >
+                    🗑️ Supprimer toutes les heures
+                  </button>
                 </div>
               )}
             </div>
