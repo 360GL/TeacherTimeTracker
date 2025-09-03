@@ -170,7 +170,8 @@ export default function TeacherHoursTracker() {
   const [newActivity, setNewActivity] = useState({
     type: "",
     date: new Date().toISOString().split("T")[0],
-    duration: "",
+    startTime: "",
+    endTime: "",
     comment: "",
     is_planned: false,
   })
@@ -235,9 +236,33 @@ export default function TeacherHoursTracker() {
   const addActivity = async () => {
     if (!user) return
 
+    const calculateDuration = (startTime: string, endTime: string): number => {
+      if (!startTime || !endTime) return 0
+
+      const [startHour, startMin] = startTime.split(":").map(Number)
+      const [endHour, endMin] = endTime.split(":").map(Number)
+
+      const startMinutes = startHour * 60 + startMin
+      let endMinutes = endHour * 60 + endMin
+
+      // Gérer le cas où l'activité traverse minuit
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60
+      }
+
+      return Math.round(((endMinutes - startMinutes) / 60) * 100) / 100
+    }
+
+    const duration = calculateDuration(newActivity.startTime, newActivity.endTime)
+
+    if (!newActivity.type || !newActivity.startTime || !newActivity.endTime || duration <= 0) {
+      alert("Veuillez remplir tous les champs obligatoires avec des heures valides")
+      return
+    }
+
     if (editingId) {
       // Mode édition
-      if (!newActivity.type || !newActivity.duration) {
+      if (!newActivity.type) {
         alert("Veuillez remplir tous les champs obligatoires")
         return
       }
@@ -247,7 +272,7 @@ export default function TeacherHoursTracker() {
         .update({
           type: newActivity.type,
           date: newActivity.date,
-          duration: Number.parseFloat(newActivity.duration),
+          duration: duration,
           comment: newActivity.comment,
           is_planned: newActivity.is_planned,
         })
@@ -262,16 +287,12 @@ export default function TeacherHoursTracker() {
       setEditingId(null)
     } else {
       // Mode ajout
-      if (!newActivity.type || !newActivity.duration) {
-        alert("Veuillez remplir tous les champs obligatoires")
-        return
-      }
 
       const { error } = await supabase.from("activities").insert({
         user_id: user.id,
         type: newActivity.type,
         date: newActivity.date,
-        duration: Number.parseFloat(newActivity.duration),
+        duration: duration,
         comment: newActivity.comment,
         is_planned: newActivity.is_planned,
       })
@@ -286,7 +307,8 @@ export default function TeacherHoursTracker() {
     setNewActivity({
       type: "",
       date: new Date().toISOString().split("T")[0],
-      duration: "",
+      startTime: "",
+      endTime: "",
       comment: "",
       is_planned: false,
     })
@@ -296,10 +318,19 @@ export default function TeacherHoursTracker() {
 
   // Modifier une activité
   const editActivity = (activity: Activity) => {
+    // Convertir la durée en heures approximatives (08:00 + durée)
+    const startTime = "08:00" // Valeur par défaut
+    const duration = activity.duration
+    const startHour = 8
+    const endHour = startHour + Math.floor(duration)
+    const endMin = Math.round((duration % 1) * 60)
+    const endTime = `${endHour.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`
+
     setNewActivity({
       type: activity.type,
       date: activity.date,
-      duration: activity.duration.toString(),
+      startTime: startTime,
+      endTime: endTime,
       comment: activity.comment || "",
       is_planned: activity.is_planned || false,
     })
@@ -370,7 +401,8 @@ Tapez "SUPPRIMER" pour confirmer :`
     setNewActivity({
       type: "",
       date: new Date().toISOString().split("T")[0],
-      duration: "",
+      startTime: "",
+      endTime: "",
       comment: "",
       is_planned: false,
     })
@@ -967,29 +999,80 @@ Tapez "SUPPRIMER" pour confirmer :`
 
                 <div>
                   <label style={{ display: "block", fontWeight: "500", marginBottom: "8px", color: "#374151" }}>
-                    Durée
+                    Plage horaire
                   </label>
-                  <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      value={newActivity.duration}
-                      onChange={(e) => setNewActivity({ ...newActivity, duration: e.target.value })}
-                      placeholder="1"
-                      style={{
-                        width: "80px",
-                        padding: "12px 16px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "1rem",
-                        backgroundColor: "white",
-                        color: "#1e293b",
-                        textAlign: "center",
-                      }}
-                    />
-                    <span style={{ color: "#64748b", fontWeight: "500" }}>h</span>
+                  <div
+                    style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "12px", alignItems: "center" }}
+                  >
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.875rem", color: "#64748b", marginBottom: "4px" }}>
+                        De
+                      </label>
+                      <input
+                        type="time"
+                        value={newActivity.startTime}
+                        onChange={(e) => setNewActivity({ ...newActivity, startTime: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: "#1e293b",
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: "1.25rem", color: "#64748b", marginTop: "20px" }}>→</div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.875rem", color: "#64748b", marginBottom: "4px" }}>
+                        À
+                      </label>
+                      <input
+                        type="time"
+                        value={newActivity.endTime}
+                        onChange={(e) => setNewActivity({ ...newActivity, endTime: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: "#1e293b",
+                        }}
+                      />
+                    </div>
                   </div>
+                  {newActivity.startTime && newActivity.endTime && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        padding: "8px 12px",
+                        backgroundColor: "#f0f9ff",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        color: "#0369a1",
+                      }}
+                    >
+                      Durée calculée : {(() => {
+                        if (!newActivity.startTime || !newActivity.endTime) return 0
+
+                        const [startHour, startMin] = newActivity.startTime.split(":").map(Number)
+                        const [endHour, endMin] = newActivity.endTime.split(":").map(Number)
+
+                        const startMinutes = startHour * 60 + startMin
+                        let endMinutes = endHour * 60 + endMin
+
+                        // Gérer le cas où l'activité traverse minuit
+                        if (endMinutes < startMinutes) {
+                          endMinutes += 24 * 60
+                        }
+
+                        return Math.round(((endMinutes - startMinutes) / 60) * 100) / 100
+                      })()}h
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1185,7 +1268,18 @@ Tapez "SUPPRIMER" pour confirmer :`
                   fontFamily: "monospace",
                 }}
               >
-                {formatStopwatchTime(stopwatchTime)}
+                {(() => {
+                  const time = stopwatchTime
+                  const hours = Math.floor(time / (1000 * 60 * 60))
+                  const minutes = Math.floor((time % (1000 * 60 * 60)) / (1000 * 60))
+                  const seconds = Math.floor((time % (1000 * 60)) / 1000)
+
+                  if (hours > 0) {
+                    return `${hours}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                  } else {
+                    return `${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                  }
+                })()}
               </div>
 
               <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginBottom: "24px" }}>
@@ -1295,7 +1389,18 @@ Tapez "SUPPRIMER" pour confirmer :`
 
             <div style={{ marginBottom: "24px", textAlign: "center" }}>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#3b82f6", marginBottom: "8px" }}>
-                {formatStopwatchTime(stopwatchTime)}
+                {(() => {
+                  const time = stopwatchTime
+                  const hours = Math.floor(time / (1000 * 60 * 60))
+                  const minutes = Math.floor((time % (1000 * 60 * 60)) / (1000 * 60))
+                  const seconds = Math.floor((time % (1000 * 60)) / 1000)
+
+                  if (hours > 0) {
+                    return `${hours}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                  } else {
+                    return `${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                  }
+                })()}
               </div>
               <div style={{ fontSize: "0.875rem", color: "#64748b" }}>
                 Soit {Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100} heures
@@ -1348,7 +1453,44 @@ Tapez "SUPPRIMER" pour confirmer :`
                 onClick={() => {
                   const select = document.getElementById("stopwatch-activity-type") as HTMLSelectElement
                   if (select.value) {
-                    saveStopwatchActivity(select.value)
+                    ;(() => {
+                      if (!user || stopwatchTime === 0) return
+
+                      const activityType = select.value
+                      const hours = Math.round((stopwatchTime / (1000 * 60 * 60)) * 100) / 100
+
+                      supabase
+                        .from("activities")
+                        .insert({
+                          user_id: user.id,
+                          type: activityType,
+                          date: new Date().toISOString().split("T")[0],
+                          duration: hours,
+                          comment: `Chronométré: ${(() => {
+                            const time = stopwatchTime
+                            const hours = Math.floor(time / (1000 * 60 * 60))
+                            const minutes = Math.floor((time % (1000 * 60 * 60)) / (1000 * 60))
+                            const seconds = Math.floor((time % (1000 * 60)) / 1000)
+
+                            if (hours > 0) {
+                              return `${hours}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                            } else {
+                              return `${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`
+                            }
+                          })()}`,
+                          is_planned: false,
+                        })
+                        .then((response) => {
+                          if (response.error) {
+                            console.error("Erreur lors de la sauvegarde:", response.error)
+                            alert("Erreur lors de la sauvegarde")
+                          } else {
+                            resetStopwatch()
+                            setShowStopwatchModal(false)
+                            loadActivities()
+                          }
+                        })
+                    })()
                   } else {
                     alert("Veuillez sélectionner un type d'activité")
                   }
